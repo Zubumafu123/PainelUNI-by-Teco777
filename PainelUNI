@@ -1,0 +1,1554 @@
+-- === UNIVERSAL SCRIPT: AIMBOT + ESP + PLAYER + MOVEMENT + ARSENAL MODS + HOME + KAVO UI ===
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- =========================================================
+-- GAME CHECK
+-- =========================================================
+
+local IsArsenal = game.PlaceId == 286090429
+
+-- =========================================================
+-- UI
+-- =========================================================
+
+local Library = loadstring(game:HttpGet(
+	"https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"
+))()
+
+local Window = Library.CreateLib(
+	"🔥 Painel Universal by Teco777",
+	"DarkTheme"
+)
+
+-- Tabs universais
+local TabAimbot = Window:NewTab("Aimbot")
+local TabESP = Window:NewTab("ESP")
+local TabPlayer = Window:NewTab("Player")
+local TabMovimento = Window:NewTab("Moviment")
+
+-- Tabs exclusivas do Arsenal
+local TabSkins
+local TabMods
+
+if IsArsenal then
+	TabSkins = Window:NewTab("Gun Skins")
+	TabMods = Window:NewTab("Gun Mods")
+end
+
+-- Sections universais
+local SectionAimbot = TabAimbot:NewSection("Aimbot")
+local SectionESP = TabESP:NewSection("ESP")
+local SectionPlayer = TabPlayer:NewSection("Player Settings")
+local SectionMovimento = TabMovimento:NewSection("Speed/Jump Power")
+
+-- Sections exclusivas
+local SectionSkins
+local GunmodsSection
+
+if IsArsenal then
+	SectionSkins = TabSkins:NewSection("Gun Skins")
+	GunmodsSection = TabMods:NewSection("Gun Mods")
+end
+
+-- =========================================================
+-- HOME
+-- =========================================================
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if not gp and input.KeyCode == Enum.KeyCode.Home then
+		Library:ToggleUI()
+	end
+end)
+
+-- =========================================================
+-- AIMBOT
+-- =========================================================
+
+local AIM_PART = "Head"
+local FOV_RADIUS = 80
+
+local aimbotEnabled = false
+local teamCheck = false
+local visibleCheck = true
+
+local aimKey = Enum.KeyCode.X
+local holdingAimKey = false
+
+local keyOptions = {
+	"X",
+	"C",
+	"V",
+	"B",
+	"Z",
+	"LeftAlt",
+	"RightAlt",
+	"MouseButton2",
+	"MouseButton1"
+}
+
+local fovCircle = Drawing.new("Circle")
+
+fovCircle.Radius = FOV_RADIUS
+fovCircle.Thickness = 1
+fovCircle.Filled = false
+fovCircle.Transparency = 0.5
+fovCircle.Color = Color3.fromRGB(255,255,255)
+fovCircle.Visible = false
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then
+		return
+	end
+
+	if input.KeyCode == aimKey or input.UserInputType == aimKey then
+		holdingAimKey = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == aimKey or input.UserInputType == aimKey then
+		holdingAimKey = false
+	end
+end)
+
+local function isTargetVisible(part)
+	if not part then
+		return false
+	end
+
+	local origin = Camera.CFrame.Position
+	local direction = part.Position - origin
+
+	local params = RaycastParams.new()
+
+	params.FilterType = Enum.RaycastFilterType.Blacklist
+	params.FilterDescendantsInstances = {
+		LocalPlayer.Character
+	}
+
+	params.IgnoreWater = true
+
+	local ray = workspace:Raycast(
+		origin,
+		direction,
+		params
+	)
+
+	return ray and ray.Instance:IsDescendantOf(part.Parent)
+end
+
+local function isValidTarget(player)
+	if player == LocalPlayer then
+		return false
+	end
+
+	if not player.Character then
+		return false
+	end
+
+	local humanoid =
+		player.Character:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid or humanoid.Health <= 0 then
+		return false
+	end
+
+	if teamCheck and player.Team == LocalPlayer.Team then
+		return false
+	end
+
+	local part =
+		player.Character:FindFirstChild(AIM_PART, true)
+
+	if not part then
+		return false
+	end
+
+	if visibleCheck then
+		return isTargetVisible(part)
+	end
+
+	return true
+end
+
+local function getClosestTarget()
+
+	local closest = nil
+	local shortest = FOV_RADIUS
+
+	for _, plr in pairs(Players:GetPlayers()) do
+
+		if isValidTarget(plr) then
+
+			local part =
+				plr.Character:FindFirstChild(AIM_PART, true)
+
+			if part then
+
+				local pos, onScreen =
+					Camera:WorldToViewportPoint(
+						part.Position
+					)
+
+				if onScreen then
+
+					local mousePos =
+						UserInputService:GetMouseLocation()
+
+					local distance =
+						(
+							Vector2.new(pos.X, pos.Y)
+							- mousePos
+						).Magnitude
+
+					if distance < shortest then
+						shortest = distance
+						closest = part
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+RunService.RenderStepped:Connect(function()
+
+	fovCircle.Position =
+		UserInputService:GetMouseLocation()
+
+	fovCircle.Visible =
+		aimbotEnabled
+
+	if aimbotEnabled and holdingAimKey then
+
+		local target =
+			getClosestTarget()
+
+		if target then
+
+			Camera.CFrame =
+				CFrame.new(
+					Camera.CFrame.Position,
+					target.Position
+				)
+
+		end
+	end
+end)
+
+-- =========================================================
+-- AIMBOT UI
+-- =========================================================
+
+SectionAimbot:NewToggle(
+	"Aimbot",
+	"Ativa o aimbot",
+	function(state)
+		aimbotEnabled = state
+	end
+)
+
+SectionAimbot:NewDropdown(
+	"Aim Key",
+	"Tecla para segurar",
+	keyOptions,
+	function(option)
+
+		if option:find("Mouse") then
+			aimKey = Enum.UserInputType[option]
+		else
+			aimKey = Enum.KeyCode[option]
+		end
+	end
+)
+
+SectionAimbot:NewSlider(
+	"FOV",
+	"Campo de visão do aimbot",
+	1000,
+	80,
+	function(value)
+
+		FOV_RADIUS = value
+		fovCircle.Radius = value
+	end
+)
+
+SectionAimbot:NewToggle(
+	"Team Check",
+	"Ignora aliados",
+	function(state)
+		teamCheck = state
+	end
+)
+
+SectionAimbot:NewToggle(
+	"Visible Check",
+	"Só alvos visíveis",
+	function(state)
+		visibleCheck = state
+	end
+)
+
+-- =========================================================
+-- ESP
+-- =========================================================
+
+local espEnabled = false
+local espNameEnabled = false
+local espLocalPlayer = false
+
+local espTeamColor = false
+local espBoxEnabled = false
+local espLineEnabled = false
+local espSkeletonEnabled = false
+
+local espCustomColor =
+	Color3.fromRGB(255,255,255)
+
+local espBoxes = {}
+
+local function getTeamColor(player)
+
+	if player.Team and player.Team.TeamColor then
+		return player.Team.TeamColor.Color
+	end
+
+	return Color3.fromRGB(255,255,255)
+end
+
+-- =========================================================
+-- R15 SKELETON
+-- =========================================================
+
+local R15_SKELETON = {
+
+	{"Head","UpperTorso"},
+	{"UpperTorso","LowerTorso"},
+
+	{"UpperTorso","LeftUpperArm"},
+	{"LeftUpperArm","LeftLowerArm"},
+	{"LeftLowerArm","LeftHand"},
+
+	{"UpperTorso","RightUpperArm"},
+	{"RightUpperArm","RightLowerArm"},
+	{"RightLowerArm","RightHand"},
+
+	{"LowerTorso","LeftUpperLeg"},
+	{"LeftUpperLeg","LeftLowerLeg"},
+	{"LeftLowerLeg","LeftFoot"},
+
+	{"LowerTorso","RightUpperLeg"},
+	{"RightUpperLeg","RightLowerLeg"},
+	{"RightLowerLeg","RightFoot"}
+}
+
+-- =========================================================
+-- R6 SKELETON
+-- =========================================================
+
+local R6_SKELETON = {
+
+	{"Head","Torso"},
+
+	{"Torso","LeftArmTop"},
+	{"LeftArmTop","LeftArmBottom"},
+
+	{"Torso","RightArmTop"},
+	{"RightArmTop","RightArmBottom"},
+
+	{"Torso","LeftLegTop"},
+	{"LeftLegTop","LeftLegBottom"},
+
+	{"Torso","RightLegTop"},
+	{"RightLegTop","RightLegBottom"}
+}
+
+local function getSkeletonType(character)
+
+	local humanoid =
+		character:FindFirstChildOfClass("Humanoid")
+
+	if humanoid then
+
+		if humanoid.RigType ==
+			Enum.HumanoidRigType.R15 then
+
+			return "R15"
+		end
+
+		if humanoid.RigType ==
+			Enum.HumanoidRigType.R6 then
+
+			return "R6"
+		end
+	end
+
+	if character:FindFirstChild("UpperTorso") then
+		return "R15"
+	end
+
+	return "R6"
+end
+
+local function getR6Point(character, pointName)
+
+	local part
+
+	if pointName == "LeftArmTop"
+		or pointName == "LeftArmBottom" then
+
+		part = character:FindFirstChild("Left Arm")
+
+	elseif pointName == "RightArmTop"
+		or pointName == "RightArmBottom" then
+
+		part = character:FindFirstChild("Right Arm")
+
+	elseif pointName == "LeftLegTop"
+		or pointName == "LeftLegBottom" then
+
+		part = character:FindFirstChild("Left Leg")
+
+	elseif pointName == "RightLegTop"
+		or pointName == "RightLegBottom" then
+
+		part = character:FindFirstChild("Right Leg")
+	end
+
+	if not part then
+		return nil
+	end
+
+	if pointName == "LeftArmTop"
+		or pointName == "RightArmTop"
+		or pointName == "LeftLegTop"
+		or pointName == "RightLegTop" then
+
+		return part.CFrame *
+			Vector3.new(
+				0,
+				part.Size.Y / 2,
+				0
+			)
+	end
+
+	if pointName == "LeftArmBottom"
+		or pointName == "RightArmBottom"
+		or pointName == "LeftLegBottom"
+		or pointName == "RightLegBottom" then
+
+		return part.CFrame *
+			Vector3.new(
+				0,
+				-part.Size.Y / 2,
+				0
+			)
+	end
+
+	return nil
+end
+
+local function getPartPosition(character, partName)
+
+	if string.find(partName, "Arm")
+		or string.find(partName, "Leg") then
+
+		local special =
+			getR6Point(
+				character,
+				partName
+			)
+
+		if special then
+			return special
+		end
+	end
+
+	local part =
+		character:FindFirstChild(partName)
+
+	if part then
+		return part.Position
+	end
+
+	return nil
+end
+
+local function hideSkeleton(lines)
+
+	for _, line in pairs(lines) do
+		line.Visible = false
+	end
+end
+
+-- =========================================================
+-- CREATE ESP
+-- =========================================================
+
+local function createESP(plr)
+
+	local NameTag =
+		Drawing.new("Text")
+
+	NameTag.Size = 13
+	NameTag.Center = true
+	NameTag.Outline = true
+	NameTag.Font = 2
+	NameTag.Color = espCustomColor
+	NameTag.Visible = false
+
+	local Box =
+		Drawing.new("Square")
+
+	Box.Thickness = 1
+	Box.Filled = false
+	Box.Color = espCustomColor
+	Box.Visible = false
+
+	local Line =
+		Drawing.new("Line")
+
+	Line.Thickness = 1
+	Line.Color = espCustomColor
+	Line.Visible = false
+
+	local SkeletonLines = {}
+
+	for i = 1,14 do
+
+		local SkeletonLine =
+			Drawing.new("Line")
+
+		SkeletonLine.Thickness = 2
+		SkeletonLine.Transparency = 1
+		SkeletonLine.Color = espCustomColor
+		SkeletonLine.Visible = false
+
+		SkeletonLines[i] =
+			SkeletonLine
+	end
+
+	espBoxes[plr] = {
+		Name = NameTag,
+		Box = Box,
+		Line = Line,
+		Skeleton = SkeletonLines
+	}
+
+	local connection
+
+	connection =
+		RunService.RenderStepped:Connect(function()
+
+			local character =
+				plr.Character
+
+			-- =================================================
+			-- LOCAL PLAYER
+			-- =================================================
+
+			if plr == LocalPlayer
+				and not espLocalPlayer then
+
+				NameTag.Visible = false
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			-- =================================================
+			-- CHARACTER
+			-- =================================================
+
+			if not character then
+
+				NameTag.Visible = false
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			local hrp =
+				character:FindFirstChild(
+					"HumanoidRootPart"
+				)
+
+			local head =
+				character:FindFirstChild(
+					"Head"
+				)
+
+			local humanoid =
+				character:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			if not hrp
+				or not head
+				or not humanoid then
+
+				NameTag.Visible = false
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			if humanoid.Health <= 0 then
+
+				NameTag.Visible = false
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			local pos, visible =
+				Camera:WorldToViewportPoint(
+					hrp.Position
+				)
+
+			if not visible then
+
+				NameTag.Visible = false
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			local espColor
+
+			if espTeamColor then
+				espColor =
+					getTeamColor(plr)
+			else
+				espColor =
+					espCustomColor
+			end
+
+			-- =================================================
+			-- NAME
+			-- SÓ APARECE COM ENABLE ESP + ESP NAME
+			-- =================================================
+
+			if espEnabled and espNameEnabled then
+
+				local headPos =
+					Camera:WorldToViewportPoint(
+						head.Position +
+						Vector3.new(0,0.5,0)
+					)
+
+				NameTag.Position =
+					Vector2.new(
+						pos.X,
+						headPos.Y - 15
+					)
+
+				NameTag.Text =
+					plr.Name
+
+				NameTag.Color =
+					espColor
+
+				NameTag.Visible =
+					true
+
+			else
+
+				NameTag.Visible =
+					false
+			end
+
+			-- =================================================
+			-- ESP DESLIGADO
+			-- =================================================
+
+			if not espEnabled then
+
+				Box.Visible = false
+				Line.Visible = false
+
+				hideSkeleton(
+					SkeletonLines
+				)
+
+				return
+			end
+
+			-- =================================================
+			-- BOX
+			-- =================================================
+
+			if espBoxEnabled then
+
+				local headPos =
+					Camera:WorldToViewportPoint(
+						head.Position +
+						Vector3.new(0,0.5,0)
+					)
+
+				local feetPos =
+					Camera:WorldToViewportPoint(
+						hrp.Position -
+						Vector3.new(0,3,0)
+					)
+
+				local height =
+					math.abs(
+						headPos.Y -
+						feetPos.Y
+					)
+
+				local width =
+					height / 2
+
+				Box.Size =
+					Vector2.new(
+						width,
+						height
+					)
+
+				Box.Position =
+					Vector2.new(
+						pos.X - width / 2,
+						headPos.Y
+					)
+
+				Box.Color =
+					espColor
+
+				Box.Visible =
+					true
+
+			else
+
+				Box.Visible =
+					false
+			end
+
+			-- =================================================
+			-- LINE
+			-- =================================================
+
+			if espLineEnabled then
+
+				local feetPos =
+					Camera:WorldToViewportPoint(
+						hrp.Position -
+						Vector3.new(0,3,0)
+					)
+
+				Line.From =
+					Vector2.new(
+						Camera.ViewportSize.X / 2,
+						Camera.ViewportSize.Y
+					)
+
+				Line.To =
+					Vector2.new(
+						pos.X,
+						feetPos.Y
+					)
+
+				Line.Color =
+					espColor
+
+				Line.Visible =
+					true
+
+			else
+
+				Line.Visible =
+					false
+			end
+
+			-- =================================================
+			-- SKELETON
+			-- =================================================
+
+			if espSkeletonEnabled then
+
+				local skeletonType =
+					getSkeletonType(
+						character
+					)
+
+				local connections
+
+				if skeletonType == "R15" then
+					connections =
+						R15_SKELETON
+				else
+					connections =
+						R6_SKELETON
+				end
+
+				for i = 1,#SkeletonLines do
+
+					local skeletonLine =
+						SkeletonLines[i]
+
+					local data =
+						connections[i]
+
+					if data then
+
+						local pos1 =
+							getPartPosition(
+								character,
+								data[1]
+							)
+
+						local pos2 =
+							getPartPosition(
+								character,
+								data[2]
+							)
+
+						if pos1 and pos2 then
+
+							local screen1, vis1 =
+								Camera:WorldToViewportPoint(
+									pos1
+								)
+
+							local screen2, vis2 =
+								Camera:WorldToViewportPoint(
+									pos2
+								)
+
+							if vis1 and vis2 then
+
+								skeletonLine.From =
+									Vector2.new(
+										screen1.X,
+										screen1.Y
+									)
+
+								skeletonLine.To =
+									Vector2.new(
+										screen2.X,
+										screen2.Y
+									)
+
+								skeletonLine.Color =
+									espColor
+
+								skeletonLine.Visible =
+									true
+
+							else
+
+								skeletonLine.Visible =
+									false
+							end
+
+						else
+
+							skeletonLine.Visible =
+								false
+						end
+
+					else
+
+						skeletonLine.Visible =
+							false
+					end
+				end
+
+			else
+
+				hideSkeleton(
+					SkeletonLines
+				)
+			end
+		end)
+
+	-- =================================================
+	-- CLEANUP
+	-- =================================================
+
+	plr.AncestryChanged:Connect(
+		function(_, parent)
+
+			if not parent then
+
+				if connection then
+					connection:Disconnect()
+				end
+
+				NameTag:Remove()
+				Box:Remove()
+				Line:Remove()
+
+				for _, skeletonLine in pairs(
+					SkeletonLines
+				) do
+
+					skeletonLine:Remove()
+				end
+
+				espBoxes[plr] =
+					nil
+			end
+		end
+	)
+end
+
+-- =========================================================
+-- PLAYERS
+-- =========================================================
+
+for _, plr in pairs(
+	Players:GetPlayers()
+) do
+
+	createESP(plr)
+end
+
+Players.PlayerAdded:Connect(
+	createESP
+)
+
+-- =========================================================
+-- ESP UI
+-- =========================================================
+
+SectionESP:NewToggle(
+	"Enable ESP",
+	"Liga Box, Lines, Skeleton e Names",
+	function(state)
+		espEnabled = state
+	end
+)
+
+SectionESP:NewToggle(
+	"ESP Name",
+	"Liga/desliga os nomes",
+	function(state)
+		espNameEnabled = state
+	end
+)
+
+SectionESP:NewToggle(
+	"ESP Local Player",
+	"Mostra o ESP no próprio jogador",
+	function(state)
+		espLocalPlayer = state
+	end
+)
+
+SectionESP:NewToggle(
+	"ESP Box",
+	"Ativa/desativa Box",
+	function(state)
+		espBoxEnabled = state
+	end
+)
+
+SectionESP:NewToggle(
+	"ESP Lines",
+	"Ativa/desativa linhas",
+	function(state)
+		espLineEnabled = state
+	end
+)
+
+SectionESP:NewToggle(
+	"Skeleton ESP",
+	"Mostra o esqueleto",
+	function(state)
+		espSkeletonEnabled = state
+	end
+)
+
+SectionESP:NewToggle(
+	"Team Color",
+	"Muda a cor pelo time",
+	function(state)
+		espTeamColor = state
+	end
+)
+
+SectionESP:NewColorPicker(
+	"ESP Color",
+	"Escolha a cor do ESP",
+	espCustomColor,
+	function(color)
+		espCustomColor = color
+	end
+)
+
+-- =========================================================
+-- PLAYER
+-- =========================================================
+
+local cameraFOV = 70
+local fovEnabled = false
+
+SectionPlayer:NewToggle(
+	"Camera FOV",
+	"Ativa o FOV personalizado",
+	function(state)
+
+		fovEnabled =
+			state
+
+		if not state then
+			Camera.FieldOfView = 70
+		end
+	end
+)
+
+SectionPlayer:NewSlider(
+	"FOV Value",
+	"Define o campo de visão da câmera",
+	120,
+	50,
+	function(value)
+
+		cameraFOV =
+			value
+
+		if fovEnabled then
+			Camera.FieldOfView =
+				cameraFOV
+		end
+	end
+)
+
+RunService.RenderStepped:Connect(function()
+
+	if fovEnabled then
+		Camera.FieldOfView =
+			cameraFOV
+	end
+end)
+
+-- =========================================================
+-- MOVIMENTAÇÃO
+-- =========================================================
+
+local velocidadeVal = 16
+local puloVal = 50
+
+local speedEnabled = false
+local jumpEnabled = false
+
+SectionMovimento:NewSlider(
+	"Speed",
+	"Ajusta WalkSpeed",
+	300,
+	16,
+	function(value)
+		velocidadeVal = value
+	end
+)
+
+SectionMovimento:NewSlider(
+	"Jump Power",
+	"Ajusta JumpPower",
+	300,
+	50,
+	function(value)
+		puloVal = value
+	end
+)
+
+SectionMovimento:NewToggle(
+	"Enable Speed",
+	"Liga/desliga velocidade",
+	function(state)
+		speedEnabled = state
+	end
+)
+
+SectionMovimento:NewToggle(
+	"Enable Jump",
+	"Liga/desliga pulo",
+	function(state)
+		jumpEnabled = state
+	end
+)
+
+RunService.RenderStepped:Connect(function()
+
+	if not speedEnabled then
+		return
+	end
+
+	local character =
+		LocalPlayer.Character
+
+	if character then
+
+		local humanoid =
+			character:FindFirstChildOfClass(
+				"Humanoid"
+			)
+
+		if humanoid then
+			humanoid.WalkSpeed =
+				velocidadeVal
+		end
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+
+	if gp then
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.Space
+		and jumpEnabled then
+
+		local character =
+			LocalPlayer.Character
+
+		if character then
+
+			local humanoid =
+				character:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			local root =
+				character:FindFirstChild(
+					"HumanoidRootPart"
+				)
+
+			if humanoid
+				and root
+				and humanoid.FloorMaterial
+					~= Enum.Material.Air then
+
+				root.Velocity =
+					Vector3.new(
+						root.Velocity.X,
+						puloVal,
+						root.Velocity.Z
+					)
+			end
+		end
+	end
+end)
+
+-- =========================================================
+-- ARSENAL ONLY: GUN SKINS + GUN MODS
+-- =========================================================
+
+if IsArsenal then
+
+	-- =======================================================
+	-- GUN SKINS
+	-- =======================================================
+
+	local gunMaterial = "Plastic"
+
+	local gunColor =
+		Color3.fromRGB(50,50,50)
+
+	local gunCharms = false
+	local rainbow1 = false
+	local rainbow2 = false
+
+	local c1 = 1
+	local c2 = 0
+	local hueIncrement = 0.1
+
+	SectionSkins:NewDropdown(
+		"Gun Material",
+		"Selecione o material",
+		{
+			"Plastic",
+			"ForceField",
+			"Wood",
+			"Grass"
+		},
+		function(opt)
+
+			gunMaterial =
+				opt
+		end
+	)
+
+	SectionSkins:NewColorPicker(
+		"Gun Color",
+		"Escolha a cor",
+		gunColor,
+		function(color)
+
+			gunColor =
+				color
+		end
+	)
+
+	SectionSkins:NewToggle(
+		"Gun Charms",
+		"Aplica material/cor nos braços",
+		function(state)
+
+			gunCharms =
+				state
+
+			if state then
+
+				task.spawn(function()
+
+					while gunCharms do
+
+						task.wait(0.01)
+
+						local arms =
+							workspace.Camera:FindFirstChild("Arms")
+
+						if arms then
+
+							for _, v in pairs(
+								arms:GetDescendants()
+							) do
+
+								if v:IsA("MeshPart") then
+
+									v.Material =
+										Enum.Material[
+											gunMaterial
+										]
+
+									v.Color =
+										gunColor
+								end
+							end
+						end
+					end
+				end)
+			end
+		end
+	)
+
+	local function zigzag(X)
+
+		return math.acos(
+			math.cos(
+				X * math.pi
+			)
+		) / math.pi
+	end
+
+	SectionSkins:NewToggle(
+		"Rainbow Gun v1",
+		"Efeito arco-íris suave",
+		function(state)
+
+			rainbow1 =
+				state
+		end
+	)
+
+	RunService.RenderStepped:Connect(function()
+
+		if rainbow1 then
+
+			local arms =
+				workspace.Camera:FindFirstChild("Arms")
+
+			if arms then
+
+				for _, v in pairs(
+					arms:GetDescendants()
+				) do
+
+					if v:IsA("MeshPart") then
+
+						v.Color =
+							Color3.fromHSV(
+								zigzag(c1),
+								1,
+								1
+							)
+					end
+				end
+			end
+
+			c1 =
+				c1 + 0.0001
+		end
+	end)
+
+	SectionSkins:NewToggle(
+		"Rainbow Gun v2",
+		"Efeito arco-íris rápido",
+		function(state)
+
+			rainbow2 =
+				state
+		end
+	)
+
+	local function updateColors()
+
+		local arms =
+			workspace.Camera:FindFirstChild("Arms")
+
+		if not arms then
+			return
+		end
+
+		for _, v in pairs(
+			arms:GetDescendants()
+		) do
+
+			if v:IsA("MeshPart") then
+
+				v.Color =
+					Color3.fromHSV(
+						c2,
+						1,
+						1
+					)
+			end
+		end
+	end
+
+	RunService.RenderStepped:Connect(function()
+
+		if rainbow2 then
+
+			c2 =
+				c2 + hueIncrement
+
+			if c2 >= 1 then
+				c2 =
+					c2 % 1
+			end
+
+			updateColors()
+		end
+	end)
+
+	SectionSkins:NewButton(
+		"Resetar Gun Skin",
+		"Volta ao padrão",
+		function()
+
+			gunColor =
+				Color3.fromRGB(
+					163,
+					162,
+					165
+				)
+
+			gunMaterial =
+				"Plastic"
+
+			local arms =
+				workspace.Camera:FindFirstChild("Arms")
+
+			if arms then
+
+				for _, v in pairs(
+					arms:GetDescendants()
+				) do
+
+					if v:IsA("MeshPart") then
+
+						v.Material =
+							Enum.Material.Plastic
+
+						v.Color =
+							gunColor
+					end
+				end
+			end
+		end
+	)
+
+	-- =======================================================
+	-- GUN MODS
+	-- =======================================================
+
+	local originalValues = {
+		FireRate = {},
+		Auto = {},
+		Spread = {}
+	}
+
+	GunmodsSection:NewToggle(
+		"Infinite Ammo v1",
+		"?",
+		function(state)
+
+			if ReplicatedStorage:FindFirstChild("wkspc")
+				and ReplicatedStorage.wkspc:FindFirstChild("CurrentCurse") then
+
+				ReplicatedStorage
+					.wkspc
+					.CurrentCurse
+					.Value =
+					state
+					and "Infinite Ammo"
+					or ""
+			end
+		end
+	)
+
+	GunmodsSection:NewToggle(
+		"Fast Fire Rate",
+		"?",
+		function(state)
+
+			local weapons =
+				ReplicatedStorage:FindFirstChild("Weapons")
+
+			if not weapons then
+				return
+			end
+
+			for _, v in pairs(
+				weapons:GetDescendants()
+			) do
+
+				if v.Name == "FireRate"
+					or v.Name == "BFireRate" then
+
+					if state then
+
+						if not originalValues.FireRate[v] then
+							originalValues.FireRate[v] =
+								v.Value
+						end
+
+						v.Value =
+							0.02
+
+					else
+
+						v.Value =
+							originalValues.FireRate[v]
+							or 0.8
+					end
+				end
+			end
+		end
+	)
+
+	GunmodsSection:NewToggle(
+		"Always Auto",
+		"?",
+		function(state)
+
+			local weapons =
+				ReplicatedStorage:FindFirstChild("Weapons")
+
+			if not weapons then
+				return
+			end
+
+			for _, v in pairs(
+				weapons:GetDescendants()
+			) do
+
+				if v.Name == "Auto"
+					or v.Name == "AutoFire"
+					or v.Name == "Automatic"
+					or v.Name == "AutoShoot"
+					or v.Name == "AutoGun" then
+
+					if state then
+
+						if not originalValues.Auto[v] then
+							originalValues.Auto[v] =
+								v.Value
+						end
+
+						v.Value =
+							true
+
+					else
+
+						v.Value =
+							originalValues.Auto[v]
+							or false
+					end
+				end
+			end
+		end
+	)
+
+	GunmodsSection:NewToggle(
+		"No Spread",
+		"?",
+		function(state)
+
+			local weapons =
+				ReplicatedStorage:FindFirstChild("Weapons")
+
+			if not weapons then
+				return
+			end
+
+			for _, v in pairs(
+				weapons:GetDescendants()
+			) do
+
+				if v.Name == "MaxSpread"
+					or v.Name == "Spread"
+					or v.Name == "SpreadControl" then
+
+					if state then
+
+						if not originalValues.Spread[v] then
+							originalValues.Spread[v] =
+								v.Value
+						end
+
+						v.Value =
+							0
+
+					else
+
+						v.Value =
+							originalValues.Spread[v]
+							or 1
+					end
+				end
+			end
+		end
+	)
+
+end
